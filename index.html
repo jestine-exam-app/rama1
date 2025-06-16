@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rama SDA Junior School - Management System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, where, orderBy, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        // Firebase configuration - Replace with your actual config
+        const firebaseConfig = {
+            apiKey: "your-api-key",
+            authDomain: "your-project.firebaseapp.com",
+            projectId: "your-project-id",
+            storageBucket: "your-project.appspot.com",
+            messagingSenderId: "123456789",
+            appId: "your-app-id"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // Make Firebase services available globally
+        window.auth = auth;
+        window.db = db;
+        window.firebaseAuth = { signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail };
+        window.firestore = { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, where, orderBy, onSnapshot };
+    </script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#5D5CDE',
+                        secondary: '#1f6b2e',
+                        accent: '#f4f4f5'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @media print {
+            .no-print { display: none !important; }
+            .print-only { display: block !important; }
+            body { margin: 0; font-size: 12px; }
+            .page-break { page-break-before: always; }
+        }
+        .print-only { display: none; }
+        
+        /* Dark mode support */
+        .dark {
+            color-scheme: dark;
+        }
+        
+        .dark .bg-white { background-color: #181818; }
+        .dark .text-gray-900 { color: #ffffff; }
+        .dark .text-gray-700 { color: #d1d5db; }
+        .dark .text-gray-600 { color: #9ca3af; }
+        .dark .border-gray-300 { border-color: #374151; }
+        .dark .bg-gray-50 { background-color: #1f2937; }
+        .dark .bg-gray-100 { background-color: #374151; }
+    </style>
+</head>
+<body class="h-full bg-white dark:bg-gray-900 transition-colors duration-200">
+    <!-- Loading Screen -->
+    <div id="loadingScreen" class="fixed inset-0 bg-white dark:bg-gray-900 flex items-center justify-center z-50">
+        <div class="text-center">
+            <div class="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p class="text-gray-600 dark:text-gray-400">Loading School Management System...</p>
+        </div>
+    </div>
+
+    <!-- Login Screen -->
+    <div id="loginScreen" class="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8 hidden">
+        <div class="max-w-md w-full space-y-8">
+            <div class="text-center">
+                <img src="https://pfst.cf2.poecdn.net/base/image/2980b3b0836ba9bc3d0e20336f1124e796a9d93dc5dfa9f90c6ae4ae9faa6d8e?w=1024&h=1024" 
+                     alt="Rama SDA Junior School Logo" class="mx-auto h-24 w-24 rounded-full">
+                <h2 class="mt-6 text-3xl font-extrabold text-gray-900 dark:text-white">Rama SDA Junior School</h2>
+                <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">Management System</p>
+                <p class="text-xs text-secondary font-semibold">IN GOD WE CAN</p>
+            </div>
+            
+            <form id="loginForm" class="mt-8 space-y-6">
+                <div class="rounded-md shadow-sm space-y-4">
+                    <div>
+                        <label for="userType" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Login As</label>
+                        <select id="userType" class="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-base dark:bg-gray-700 dark:text-white">
+                            <option value="admin">Administrator</option>
+                            <option value="teacher">Teacher</option>
+                            <option value="parent">Parent</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="username" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
+                        <input id="username" name="username" type="email" required 
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-base dark:bg-gray-700 dark:text-white"
+                               placeholder="Enter email">
+                    </div>
+                    <div>
+                        <label for="password" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
+                        <input id="password" name="password" type="password" required 
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-base dark:bg-gray-700 dark:text-white"
+                               placeholder="Enter password">
+                    </div>
+                </div>
+
+                <div id="errorMessage" class="hidden text-red-600 text-sm text-center"></div>
+
+                <div class="flex items-center justify-between">
+                    <button type="button" id="forgotPassword" class="text-sm text-primary hover:text-primary/80">
+                        Forgot Password?
+                    </button>
+                </div>
+
+                <div>
+                    <button type="submit" class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                        Sign In
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Password Reset Modal -->
+    <div id="resetModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white dark:bg-gray-800">
+            <div class="mt-3">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">Reset Password</h3>
+                <div class="mt-4">
+                    <input type="email" id="resetEmail" placeholder="Enter your email" 
+                           class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-base dark:bg-gray-700 dark:text-white">
+                </div>
+                <div id="resetMessage" class="hidden mt-2 text-sm"></div>
+                <div class="flex justify-end mt-4 space-x-2">
+                    <button id="cancelReset" class="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-400 dark:hover:bg-gray-500">Cancel</button>
+                    <button id="sendReset" class="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90">Send Reset Link</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Application -->
+    <div id="mainApp" class="hidden">
+        <!-- Navigation -->
+        <nav class="bg-secondary shadow-lg no-print">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between h-16">
+                    <div class="flex items-center">
+                        <img src="https://pfst.cf2.poecdn.net/base/image/2980b3b0836ba9bc3d0e20336f1124e796a9d93dc5dfa9f90c6ae4ae9faa6d8e?w=1024&h=1024" 
+                             alt="School Logo" class="h-8 w-8 rounded-full mr-3">
+                        <span class="text-white font-bold text-lg">Rama SDA Junior School</span>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <span id="userInfo" class="text-white text-sm"></span>
+                        <button id="logoutBtn" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm">Logout</button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Dashboard Container -->
+        <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+            <!-- Admin Dashboard -->
+            <div id="adminDashboard" class="hidden">
+                <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg mb-6">
+                    <div class="px-4 py-5 sm:p-6">
+                        <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-6">Administrator Dashboard</h1>
+                        
+                        <!-- Quick Stats -->
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                            <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                                <div class="text-blue-600 dark:text-blue-400 text-sm font-medium">Total Students</div>
+                                <div id="totalStudents" class="text-2xl font-bold text-blue-900 dark:text-blue-100">0</div>
+                            </div>
+                            <div class="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
+                                <div class="text-green-600 dark:text-green-400 text-sm font-medium">Total Teachers</div>
+                                <div id="totalTeachers" class="text-2xl font-bold text-green-900 dark:text-green-100">0</div>
+                            </div>
+                            <div class="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg">
+                                <div class="text-yellow-600 dark:text-yellow-400 text-sm font-medium">Active Classes</div>
+                                <div class="text-2xl font-bold text-yellow-900 dark:text-yellow-100">3</div>
+                            </div>
+                            <div class="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg">
+                                <div class="text-purple-600 dark:text-purple-400 text-sm font-medium">Learning Areas</div>
+                                <div class="text-2xl font-bold text-purple-900 dark:text-purple-100">9</div>
+                            </div>
+                        </div>
+
+                        <!-- Admin Actions -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <button onclick="showSection('studentManagement')" class="p-4 bg-blue-100 dark:bg-blue-900/20 hover:bg-blue-200 dark:hover:bg-blue-900/30 rounded-lg text-left transition-colors">
+                                <h3 class="font-semibold text-blue-900 dark:text-blue-100">Student Management</h3>
+                                <p class="text-sm text-blue-700 dark:text-blue-300">Register, edit, and manage students</p>
+                            </button>
+                            <button onclick="showSection('teacherManagement')" class="p-4 bg-green-100 dark:bg-green-900/20 hover:bg-green-200 dark:hover:bg-green-900/30 rounded-lg text-left transition-colors">
+                                <h3 class="font-semibold text-green-900 dark:text-green-100">Teacher Management</h3>
+                                <p class="text-sm text-green-700 dark:text-green-300">Register, edit, and manage teachers</p>
+                            </button>
+                            <button onclick="showSection('marksManagement')" class="p-4 bg-yellow-100 dark:bg-yellow-900/20 hover:bg-yellow-200 dark:hover:bg-yellow-900/30 rounded-lg text-left transition-colors">
+                                <h3 class="font-semibold text-yellow-900 dark:text-yellow-100">Marks Management</h3>
+                                <p class="text-sm text-yellow-700 dark:text-yellow-300">View and edit student marks</p>
+                            </button>
+                            <button onclick="showSection('announcements')" class="p-4 bg-purple-100 dark:bg-purple-900/20 hover:bg-purple-200 dark:hover:bg-purple-900/30 rounded-lg text-left transition-colors">
+                                <h3 class="font-semibold text-purple-900 dark:text-purple-100">Announcements</h3>
+                                <p class="text-sm text-purple-700 dark:text-purple-300">Post and manage school announcements</p>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Teacher Dashboard -->
+            <div id="teacherDashboard" class="hidden">
+                <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg mb-6">
+                    <div class="px-4 py-5 sm:p-6">
+                        <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-6">Teacher Dashboard</h1>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <button onclick="showSection('marksEntry')" class="p-4 bg-blue-100 dark:bg-blue-900/20 hover:bg-blue-200 dark:hover:bg-blue-900/30 rounded-lg text-left transition-colors">
+                                <h3 class="font-semibold text-blue-900 dark:text-blue-100">Marks Entry</h3>
+                                <p class="text-sm text-blue-700 dark:text-blue-300">Enter marks for your subjects</p>
+                            </button>
+                            <button onclick="showSection('announcements')" class="p-4 bg-green-100 dark:bg-green-900/20 hover:bg-green-200 dark:hover:bg-green-900/30 rounded-lg text-left transition-colors">
+                                <h3 class="font-semibold text-green-900 dark:text-green-100">Announcements</h3>
+                                <p class="text-sm text-green-700 dark:text-green-300">View school announcements</p>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Parent Dashboard -->
+            <div id="parentDashboard" class="hidden">
+                <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg mb-6">
+                    <div class="px-4 py-5 sm:p-6">
+                        <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-6">Parent Dashboard</h1>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <button onclick="showSection('studentResults')" class="p-4 bg-blue-100 dark:bg-blue-900/20 hover:bg-blue-200 dark:hover:bg-blue-900/30 rounded-lg text-left transition-colors">
+                                <h3 class="font-semibold text-blue-900 dark:text-blue-100">Student Results</h3>
+                                <p class="text-sm text-blue-700 dark:text-blue-300">View your child's performance</p>
+                            </button>
+                            <button onclick="showSection('announcements')" class="p-4 bg-green-100 dark:bg-green-900/20 hover:bg-green-200 dark:hover:bg-green-900/30 rounded-lg text-left transition-colors">
+                                <h3 class="font-semibold text-green-900 dark:text-green-100">Announcements</h3>
+                                <p class="text-sm text-green-700 dark:text-green-300">View school announcements</p>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Content Sections -->
+            <div id="contentArea" class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+                <!-- Student Management Section -->
+                <div id="studentManagement" class="p-6 hidden">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-xl font-bold text-gray-900 dark:text-white">Student Management</h2>
+                        <button onclick="showAddStudentForm()" class="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-md">Add New Student</button>
+                    </div>
+
+                    <!-- Add/Edit Student Form -->
+                    <div id="studentForm" class="hidden mb-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                        <h3 id="studentFormTitle" class="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Add New Student</h3>
+                        <form id="addStudentForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <input type="hidden" id="editStudentId">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Full Name</label>
+                                <input type="text" id="studentName" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-base dark:bg-gray-800 dark:text-white">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Admission Number</label>
+                                <input type="text" id="admissionNumber" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-base dark:bg-gray-800 dark:text-white">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Assessment Number</label>
+                                <input type="text" id="assessmentNumber" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-base dark:bg-gray-800 dark:text-white">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Gender</label>
+                                <select id="studentGender" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-base dark:bg-gray-800 dark:text-white">
+                                    <option value="">Select Gender</option>
+                                    <option value="Male">Male</option>
+                                    <option value="Female">Female</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Grade</label>
+                                <select id="studentGrade" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-base dark:bg-gray-800 dark:text-white">
+                                    <option value="">Select Grade</option>
+                                    <option value="7">Grade 7</option>
+                                    <option value="8">Grade 8</option>
+                                    <option value="9">Grade 9</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date of Birth</label>
+                                <input type="date" id="studentDOB" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-base dark:bg-gray-800 dark:text-white">
+                            </div>
+                            <div class="md:col-span-2">
+                                <div class="flex space-x-2">
+                                    <button type="submit" class="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-md">Save Student</button>
+                                    <button type="button" onclick="hideStudentForm()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md">Cancel</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Students List -->
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead class="bg-gray-50 dark:bg-gray-700">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Name</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Admission No.</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Assessment No.</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Grade</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Gender</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="studentsTableBody" class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                <!-- Students will be populated here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Announcements Section -->
+                <div id="announcements" class="p-6 hidden">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-xl font-bold text-gray-900 dark:text-white">Announcements</h2>
+                        <button id="addAnnouncementBtn" onclick="showAddAnnouncementForm()" class="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-md">Add Announcement</button>
+                    </div>
+
+                    <!-- Add Announcement Form -->
+                    <div id="announcementForm" class="hidden mb-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                        <h3 class="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Add New Announcement</h3>
+                        <form id="addAnnouncementForm" class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Title</label>
+                                <input type="text" id="announcementTitle" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-base dark:bg-gray-800 dark:text-white">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Content</label>
+                                <textarea id="announcementContent" required rows="4" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-base dark:bg-gray-800 dark:text-white"></textarea>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Priority</label>
+                                <select id="announcementPriority" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-base dark:bg-gray-800 dark:text-white">
+                                    <option value="normal">Normal</option>
+                                    <option value="high">High</option>
+                                    <option value="urgent">Urgent</option>
+                                </select>
+                            </div>
+                            <div class="flex space-x-2">
+                                <button type="submit" class="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-md">Post Announcement</button>
+                                <button type="button" onclick="hideAnnouncementForm()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md">Cancel</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Announcements List -->
+                    <div id="announcementsList" class="space-y-4">
+                        <!-- Announcements will be populated here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let currentUser = null;
+        let currentUserData = null;
+
+        // Dark mode setup
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.classList.add('dark');
+        }
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+            if (event.matches) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        });
+
+        // Initialize app when Firebase is loaded
+        window.addEventListener('load', function() {
+            setTimeout(initializeApp, 500);
+        });
+
+        function initializeApp() {
+            // Auth state observer
+            window.firebaseAuth.onAuthStateChanged(async (user) => {
+                if (user) {
+                    currentUser = user;
+                    await loadUserData();
+                    showMainApp();
+                } else {
+                    currentUser = null;
+                    currentUserData = null;
+                    showLoginScreen();
+                }
+            });
+        }
+
+        async function loadUserData() {
+            try {
+                const usersRef = window.firestore.collection(window.db, 'users');
+                const q = window.firestore.query(usersRef, window.firestore.where('email', '==', currentUser.email));
+                const querySnapshot = await window.firestore.getDocs(q);
+                
+                if (!querySnapshot.empty) {
+                    currentUserData = { id: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() };
+                } else {
+                    // Create user data if not exists
+                    currentUserData = {
+                        email: currentUser.email,
+                        name: currentUser.displayName || currentUser.email,
+                        role: 'admin', // Default role
+                        createdAt: new Date()
+                    };
+                    const docRef = await window.firestore.addDoc(window.firestore.collection(window.db, 'users'), currentUserData);
+                    currentUserData.id = docRef.id;
+                }
+            } catch (error) {
+                console.error('Error loading user data:', error);
+            }
+        }
+
+        function showLoadingScreen() {
+            document.getElementById('loadingScreen').classList.remove('hidden');
+            document.getElementById('loginScreen').classList.add('hidden');
+            document.getElementById('mainApp').classList.add('hidden');
+        }
+
+        function showLoginScreen() {
+            document.getElementById('loadingScreen').classList.add('hidden');
+            document.getElementById('loginScreen').classList.remove('hidden');
+            document.getElementById('mainApp').classList.add('hidden');
+        }
+
+        function showMainApp() {
+            document.getElementById('loadingScreen').classList.add('hidden');
+            document.getElementById('loginScreen').classList.add('hidden');
+            document.getElementById('mainApp').classList.remove('hidden');
+            
+            // Update user info
+            document.getElementById('userInfo').textContent = `${currentUserData.name} (${currentUserData.role})`;
+            
+            // Show appropriate dashboard
+            showDashboard(currentUserData.role);
+            loadDashboardData();
+        }
+
+        function showDashboard(role) {
+            // Hide all dashboards
+            document.getElementById('adminDashboard').classList.add('hidden');
+            document.getElementById('teacherDashboard').classList.add('hidden');
+            document.getElementById('parentDashboard').classList.add('hidden');
+            
+            // Show appropriate dashboard
+            document.getElementById(`${role}Dashboard`).classList.remove('hidden');
+            
+            // Hide admin-specific elements for non-admin users
+            if (role !== 'admin') {
+                document.getElementById('addAnnouncementBtn').classList.add('hidden');
+            }
+        }
+
+        async function loadDashboardData() {
+            if (currentUserData.role === 'admin') {
+                await loadStudentCount();
+                await loadTeacherCount();
+            }
+            await loadAnnouncements();
+        }
+
+        async function loadStudentCount() {
+            try {
+                const studentsRef = window.firestore.collection(window.db, 'students');
+                const snapshot = await window.firestore.getDocs(studentsRef);
+                document.getElementById('totalStudents').textContent = snapshot.size;
+            } catch (error) {
+                console.error('Error loading student count:', error);
+            }
+        }
+
+        async function loadTeacherCount() {
+            try {
+                const usersRef = window.firestore.collection(window.db, 'users');
+                const q = window.firestore.query(usersRef, window.firestore.where('role', '==', 'teacher'));
+                const snapshot = await window.firestore.getDocs(q);
+                document.getElementById('totalTeachers').textContent = snapshot.size;
+            } catch (error) {
+                console.error('Error loading teacher count:', error);
+            }
+        }
+
+        // Login form handler
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const email = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const userType = document.getElementById('userType').value;
+            
+            try {
+                await window.firebaseAuth.signInWithEmailAndPassword(window.auth, email, password);
+                // User data will be loaded in the auth state observer
+            } catch (error) {
+                showError('Invalid email or password. Please try again.');
+                console.error('Login error:', error);
+            }
+        });
+
+        // Logout handler
+        document.getElementById('logoutBtn').addEventListener('click', async () => {
+            try {
+                await window.firebaseAuth.signOut(window.auth);
+            } catch (error) {
+                console.error('Logout error:', error);
+            }
+        });
+
+        // Password reset handlers
+        document.getElementById('forgotPassword').addEventListener('click', () => {
+            document.getElementById('resetModal').classList.remove('hidden');
+        });
+
+        document.getElementById('cancelReset').addEventListener('click', () => {
+            document.getElementById('resetModal').classList.add('hidden');
+            document.getElementById('resetEmail').value = '';
+            document.getElementById('resetMessage').classList.add('hidden');
+        });
+
+        document.getElementById('sendReset').addEventListener('click', async () => {
+            const email = document.getElementById('resetEmail').value;
+            if (!email) {
+                showResetMessage('Please enter your email address.', 'error');
+                return;
+            }
+            
+            try {
+                await window.firebaseAuth.sendPasswordResetEmail(window.auth, email);
+                showResetMessage('Password reset email sent! Check your inbox.', 'success');
+            } catch (error) {
+                showResetMessage('Error sending reset email. Please try again.', 'error');
+                console.error('Password reset error:', error);
+            }
+        });
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.classList.remove('hidden');
+            setTimeout(() => errorDiv.classList.add('hidden'), 5000);
+        }
+
+        function showResetMessage(message, type) {
+            const messageDiv = document.getElementById('resetMessage');
+            messageDiv.textContent = message;
+            messageDiv.className = `mt-2 text-sm ${type === 'error' ? 'text-red-600' : 'text-green-600'}`;
+            messageDiv.classList.remove('hidden');
+        }
+
+        function showSection(sectionId) {
+            // Hide all sections
+            const sections = ['studentManagement', 'teacherManagement', 'marksManagement', 'announcements', 'marksEntry', 'studentResults'];
+            sections.forEach(section => {
+                document.getElementById(section)?.classList.add('hidden');
+            });
+            
+            // Show selected section
+            document.getElementById(sectionId).classList.remove('hidden');
+            
+            // Load section data
+            if (sectionId === 'studentManagement') {
+                loadStudents();
+            } else if (sectionId === 'announcements') {
+                loadAnnouncements();
+            }
+        }
+
+        // Student Management Functions
+        function showAddStudentForm() {
+            document.getElementById('studentForm').classList.remove('hidden');
+            document.getElementById('studentFormTitle').textContent = 'Add New Student';
+            document.getElementById('addStudentForm').reset();
+            document.getElementById('editStudentId').value = '';
+        }
+
+        function hideStudentForm() {
+            document.getElementById('studentForm').classList.add('hidden');
+        }
+
+        function editStudent(studentId) {
+            // Load student data and populate form
+            loadStudentForEdit(studentId);
+        }
+
+        async function loadStudentForEdit(studentId) {
+            try {
+                const studentDoc = await window.firestore.doc(window.db, 'students', studentId);
+                const docSnap = await window.firestore.getDocs(studentDoc);
+                
+                if (docSnap.exists()) {
+                    const student = docSnap.data();
+                    document.getElementById('editStudentId').value = studentId;
+                    document.getElementById('studentName').value = student.name;
+                    document.getElementById('admissionNumber').value = student.admissionNumber;
+                    document.getElementById('assessmentNumber').value = student.assessmentNumber;
+                    document.getElementById('studentGender').value = student.gender;
+                    document.getElementById('studentGrade').value = student.grade;
+                    document.getElementById('studentDOB').value = student.dateOfBirth || '';
+                    
+                    document.getElementById('studentFormTitle').textContent = 'Edit Student';
+                    document.getElementById('studentForm').classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('Error loading student:', error);
+            }
+        }
+
+        async function deleteStudent(studentId) {
+            if (confirm('Are you sure you want to delete this student?')) {
+                try {
+                    await window.firestore.deleteDoc(window.firestore.doc(window.db, 'students', studentId));
+                    loadStudents(); // Reload the list
+                } catch (error) {
+                    console.error('Error deleting student:', error);
+                }
+            }
+        }
+
+        // Student form submit handler
+        document.getElementById('addStudentForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const studentData = {
+                name: document.getElementById('studentName').value,
+                admissionNumber: document.getElementById('admissionNumber').value,
+                assessmentNumber: document.getElementById('assessmentNumber').value,
+                gender: document.getElementById('studentGender').value,
+                grade: document.getElementById('studentGrade').value,
+                dateOfBirth: document.getElementById('studentDOB').value,
+                createdAt: new Date(),
+                updatedAt: new Date()
+            };
+            
+            try {
+                const editId = document.getElementById('editStudentId').value;
+                if (editId) {
+                    // Update existing student
+                    await window.firestore.updateDoc(window.firestore.doc(window.db, 'students', editId), {
+                        ...studentData,
+                        updatedAt: new Date()
+                    });
+                } else {
+                    // Add new student
+                    await window.firestore.addDoc(window.firestore.collection(window.db, 'students'), studentData);
+                }
+                
+                hideStudentForm();
+                loadStudents();
+                loadStudentCount(); // Update dashboard count
+            } catch (error) {
+                console.error('Error saving student:', error);
+            }
+        });
+
+        async function loadStudents() {
+            try {
+                const studentsRef = window.firestore.collection(window.db, 'students');
+                const q = window.firestore.query(studentsRef, window.firestore.orderBy('name'));
+                const querySnapshot = await window.firestore.getDocs(q);
+                
+                const tbody = document.getElementById('studentsTableBody');
+                tbody.innerHTML = '';
+                
+                querySnapshot.forEach((doc) => {
+                    const student = doc.data();
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">${student.name}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">${student.admissionNumber}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">${student.assessmentNumber}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">Grade ${student.grade}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">${student.gender}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <button onclick="editStudent('${doc.id}')" class="text-indigo-600 hover:text-indigo-900 mr-2">Edit</button>
+                            <button onclick="deleteStudent('${doc.id}')" class="text-red-600 hover:text-red-900">Delete</button>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            } catch (error) {
+                console.error('Error loading students:', error);
+            }
+        }
+
+        // Announcement Management Functions
+        function showAddAnnouncementForm() {
+            document.getElementById('announcementForm').classList.remove('hidden');
+            document.getElementById('addAnnouncementForm').reset();
+        }
+
+        function hideAnnouncementForm() {
+            document.getElementById('announcementForm').classList.add('hidden');
+        }
+
+        // Announcement form submit handler
+        document.getElementById('addAnnouncementForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const announcementData = {
+                title: document.getElementById('announcementTitle').value,
+                content: document.getElementById('announcementContent').value,
+                priority: document.getElementById('announcementPriority').value,
+                author: currentUserData.name,
+                authorId: currentUser.uid,
+                createdAt: new Date()
+            };
+            
+            try {
+                await window.firestore.addDoc(window.firestore.collection(window.db, 'announcements'), announcementData);
+                hideAnnouncementForm();
+                loadAnnouncements();
+            } catch (error) {
+                console.error('Error saving announcement:', error);
+            }
+        });
+
+        async function loadAnnouncements() {
+            try {
+                const announcementsRef = window.firestore.collection(window.db, 'announcements');
+                const q = window.firestore.query(announcementsRef, window.firestore.orderBy('createdAt', 'desc'));
+                const querySnapshot = await window.firestore.getDocs(q);
+                
+                const container = document.getElementById('announcementsList');
+                container.innerHTML = '';
+                
+                querySnapshot.forEach((doc) => {
+                    const announcement = doc.data();
+                    const date = announcement.createdAt.toDate().toLocaleDateString();
+                    
+                    const priorityColors = {
+                        normal: 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400',
+                        high: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400',
+                        urgent: 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
+                    };
+                    
+                    const announcementDiv = document.createElement('div');
+                    announcementDiv.className = 'bg-gray-50 dark:bg-gray-700 p-4 rounded-lg';
+                    announcementDiv.innerHTML = `
+                        <div class="flex justify-between items-start mb-2">
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">${announcement.title}</h3>
+                            <span class="px-2 py-1 text-xs font-medium rounded-full ${priorityColors[announcement.priority]}">${announcement.priority.toUpperCase()}</span>
+                        </div>
+                        <p class="text-gray-700 dark:text-gray-300 mb-2">${announcement.content}</p>
+                        <div class="text-sm text-gray-500 dark:text-gray-400">
+                            By ${announcement.author} on ${date}
+                        </div>
+                    `;
+                    container.appendChild(announcementDiv);
+                });
+            } catch (error) {
+                console.error('Error loading announcements:', error);
+            }
+        }
+    </script>
+</body>
+</html>
